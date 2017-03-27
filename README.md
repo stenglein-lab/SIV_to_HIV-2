@@ -16,6 +16,14 @@ To run the pipeline, specify the sample name, for instance run:
 
 see identify_variants script for additional detail on the pipeline's steps
 
+The 'final' output of this script will be a file named stock_virus_variant_alleles.lofreq.txt [or similar].
+
+This file will contain a table of the variants identified in that dataset relative to the SIV reference sequence.
+
+A number of these variant table files can be merged into a matrix for all variants using the tabulate_variants script, e.g.:
+
+`./tabluate_variants *_variant_alleles.lofreq.txt`
+
 
 ### Usage / External dependencies
 
@@ -29,6 +37,11 @@ tools:
 * samtools			http://www.htslib.org/
 * lofreq			http://csb5.github.io/lofreq/
 
+## The SIV reference sequence
+
+Can be found in the siv.fa fasta format file.  This corresponds to the consensus sequence of the
+stock virus used to infect mice at the beginning of the experiment.  The annotations for this file
+are in the Stock_virus_consensus_v1.gff file
 
 ## to obtain the datasets
 
