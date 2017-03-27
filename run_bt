@@ -1,0 +1,49 @@
+#!/bin/bash
+
+# this script uses bowtie2 to align paired reads to a reference sequence
+#
+# Mark Stenglein 3/27/2017
+
+id=$1
+
+# these are the 'pre-filtered' fastq files 
+f1=${id}_R1_fu.fastq
+f2=${id}_R2_fu.fastq
+
+bt_index=$2
+
+output_prefix=${f1}.${bt_index}.paired
+
+log_f=${output_prefix}.bt_log
+
+# the bowtie command that will be run
+cmd="bowtie2 
+ -x $bt_index
+ -q
+ -1 $f1 
+ -2 $f2
+ --rg-id 1
+ --rg SM:1
+ --local
+ --qc-filter
+ --score-min C,120,1
+ --maxins 700
+ --no-unal
+ --time
+ --al-conc ${output_prefix}.conc_hits.fastq
+ --threads 12
+ -S ${output_prefix}.sam"
+
+# print out command that will be run, and log it
+echo $cmd
+echo $0 $* > $log_f
+echo $cmd >> $log_f
+
+# actually run bowtie here
+$cmd 2>> $log_f
+
+# process output using samtools
+samtools view -S -b ${output_prefix}.sam > ${output_prefix}.bam
+samtools sort ${output_prefix}.bam >  ${output_prefix}_sorted.bam
+samtools index ${output_prefix}_sorted.bam
+samtools depth ${output_prefix}_sorted.bam > ${output_prefix}.depth

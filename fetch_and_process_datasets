@@ -1,0 +1,4 @@
+#!/bin/bash
+
+# download datasets from the SRA and name them appropriately
+# TODO: update this once SRA datasets deposited
