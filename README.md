@@ -3,7 +3,7 @@
 This repository contains the scripts used to quantify and tabulate 
 variants in SIV->HIV-2 sequencing datasets as described in:
 
-** TODO: insert reference (DOI) here **
+**TODO:** insert reference (DOI) here 
 
 
 ## to run the analysis pipeline on a dataset
@@ -34,4 +34,4 @@ tools:
 
 To obtain the raw sequence datasets, run the fetch_and_process_datasets script
 
-** TODO: create this script, once datasets in SRA **
+**TODO:** create this script, once datasets in SRA 
