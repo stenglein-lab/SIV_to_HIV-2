@@ -146,7 +146,8 @@ sub process_variant
 {
    my $min_allele_freq = 0.05;
    my ($seg_id, $position, $ref, $alt, $ref_depth, $variant_depth, $depth) = @_;
-   my $variant_fraction = sprintf ("%0.2f", $variant_depth / ($ref_depth + $variant_depth));
+   # my $variant_fraction = sprintf ("%0.2f", $variant_depth / ($ref_depth + $variant_depth));
+   my $variant_fraction = sprintf ("%0.2f", ($variant_depth / $depth) );
    if (defined $basemap{$position})
    {
       # this is in an annotated feature

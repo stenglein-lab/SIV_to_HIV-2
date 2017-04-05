@@ -1,0 +1,224 @@
+#!/usr/bin/perl
+
+use strict;
+use PostScript::Simple;
+use Data::Dumper;
+
+my $usage = <<USAGE;
+
+  $0 variant_table_file
+
+USAGE
+
+my %variants = ();
+my @files = ();
+
+# create a new PostScript object
+my $p = new PostScript::Simple(papersize => "Letter",
+                                eps => 0,
+                                colour => 1,
+                                units => "in");
+    
+
+# create a new page
+$p->newpage;
+
+$p->setfont("Helvetica", 10);
+
+my $x_margin = 1;
+my $y_start = 3;
+my $y = $y_start;
+my $y_linesize = 0.2;
+my $y_whitespace = 0.05;
+my $y_offset = $y_linesize + $y_whitespace;
+
+
+# color values
+# light red to red and light grey to grey gradients: see http://www.herethere.net/~samson/php/color_gradient/
+my @color_ranges =  ( [ 0xFFDFDF, 0xFF0000] , 
+                      [ 0xC7C7C7, 0x676767] );
+
+
+# draw line for genome
+my $bases_per_inch = 1500;
+my $genome_length = 9961;
+# default resolution 
+my $pixels_per_inch = 72;
+my $inches_per_pixel = 1/$pixels_per_inch;
+my $inches_per_base = $inches_per_pixel * (1/$bases_per_inch);
+
+$p->setcolour("black");
+# line(x1,y1, x2,y2 [,red, green, blue])
+# Draws a line from the co-ordinates (x1,x2) to (x2,y2).
+$p->line($x_margin, $y, $x_margin + ($genome_length / $bases_per_inch), $y);
+
+while (my $file = shift)
+{
+   open (my $fh, "<", $file) or die ($!);
+   push @files, $file;
+   process_file($file, $fh);
+}
+
+
+# interpolate an RGB color value based on beginning and ending RGB values and fractional distance between
+# return an array of decimal RGB values
+# based on code from http://www.herethere.net/~samson/php/color_gradient/color_gradient_generator.php.txt
+
+sub freq_to_rgb
+{
+   my $freq = shift @_;
+	my $color_begin = shift @_;
+	my $color_end = shift @_;
+
+   my $theR0 = ($color_begin & 0xff0000) >> 16;
+   my $theG0 = ($color_begin & 0x00ff00) >> 8;
+   my $theB0 = ($color_begin & 0x0000ff) >> 0;
+ 
+   my $theR1 = ($color_end & 0xff0000) >> 16;
+   my $theG1 = ($color_end & 0x00ff00) >> 8;
+   my $theB1 = ($color_end & 0x0000ff) >> 0;
+
+   my $theR = interpolate($theR0, $theR1, $freq);
+   my $theG = interpolate($theG0, $theG1, $freq);
+   my $theB = interpolate($theB0, $theB1, $freq);
+
+   sub interpolate
+   {
+      my ($pBegin, $pEnd, $frac) = @_;
+      if ($pBegin < $pEnd) 
+      {
+         return (($pEnd - $pBegin) * $frac) + $pBegin;
+      } 
+		else 
+		{
+         return (($pBegin - $pEnd) * (1 - $frac)) + $pEnd;
+      }
+   }
+
+	# warn ("freq: $freq\tR: $theR, G: $theG, B: $theB\n");
+
+	return ($theR, $theG, $theB);
+}
+
+sub process_file
+{
+   my $filename = shift @_; 
+   my $fh = shift @_; 
+	my $filled = 0;
+
+	my $header_lines = 2;
+	my $line_count = 0;
+
+   while (<$fh>)
+   {
+      # chomp;
+		$line_count += 1;
+
+		if ($line_count <= $header_lines)
+		{
+			if ($line_count == 1)
+			{
+            my @fields = split; 
+            ## print Dumper(@fields);
+
+            my ($position,$cds_hit,$ref_aa,$codon_number,$alt_aa,$N_or_S, @filenames) = @fields;
+            my $texty = $y_start + $y_offset;
+            foreach my $filename (@filenames)
+            {
+               my $textx = 0.1;
+               warn "x: $textx y: $texty t: $filename\n";
+               $p->text($textx, $texty, "$filename");
+               $texty += $y_offset;
+            }
+			}
+		   next;
+		}
+
+      my @fields = split "\t";
+		my $num_fields = scalar @fields;
+		warn "# fields: $num_fields\n";
+
+      my ($position,$cds_hit,$ref_aa,$codon_number,$alt_aa,$N_or_S, @freqs) = @fields;
+		$y = $y_start;
+
+		## my $num_freqs = scalar @freqs;
+		## warn "# freq: $num_freqs\n";
+
+		foreach my $freq (@freqs)
+		{
+			if ($freq == 0)
+			{
+			   $y += $y_offset;
+			   next;
+			}
+
+         if ($N_or_S eq "N")
+         {
+				# red color gradient based on variant frequency
+				my $begin = $color_ranges[0][0];
+				my $end = $color_ranges[0][1];
+				# warn "begin: $begin\tend: $end\n";
+				my @rgb = freq_to_rgb($freq, $begin, $end);
+				# my @rgb = freq_to_rgb($freq, 0xFF9F9F, 0xFF0000);
+            $p->setcolour(@rgb);
+
+		      # $p->setlinewidth($inches_per_base); 
+		      $p->setlinewidth(0.014); # approx 1 pt
+			   $filled=1;
+         }
+         # elsif ($N_or_S eq "S")
+         else
+         {
+				# grey color gradient based on variant frequency
+				my $begin = $color_ranges[1][0];
+				my $end = $color_ranges[1][1];
+				my @rgb = freq_to_rgb($freq, $begin, $end);
+            $p->setcolour(@rgb);
+
+		      # $p->setlinewidth($inches_per_base); 
+		      $p->setlinewidth(0.014); # approx 1 pt
+			   $filled=0;
+         }
+   
+			# actually draw the line
+			# move up cause next sample...
+			$y += $y_offset;
+         my $x = $x_margin + ($position/$bases_per_inch);
+			$p->line($x, $y, $x, ($y+$y_linesize));
+		}
+   }
+}
+
+# output colorbar
+my $box_width = 2;
+my $box_height = 0.5;
+my $box_steps = 100;
+my $x_offset = $box_width / $box_steps;
+
+my $x1 = $x_margin;
+my $y1 = $y_start - 2;
+foreach my $color_index (0 .. 1)
+{
+   for (my $i = 0; $i < 1; $i += (1 / $box_steps) )  
+   {
+		my $begin = $color_ranges[$color_index][0];
+		my $end = $color_ranges[$color_index][1];
+	   my @rgb = freq_to_rgb($i, $begin, $end);
+	   $p->setcolour(@rgb);
+	   my $x2 = $x1 + $x_offset;
+	   my $y2 = $y1 + $box_height;
+	   $p->box( {filled => 1}, $x1,$y1,$x2,$y2);
+		$x1 += $x_offset;
+   }
+
+	$x1 = $x_margin;
+	$y1 -= ($box_height + 0.1)
+}
+
+
+
+$p->output("file.ps");
+`pstopdf file.ps`;
+
+
+
