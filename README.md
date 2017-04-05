@@ -56,8 +56,8 @@ These scripts were used to create plots of variant frequencies.  They depend on 
 
 http://search.cpan.org/~mcnewton/PostScript-Simple-0.09/lib/PostScript/Simple.pm
 
-* create_variant_line_plot								This script plots all variants as a line plot
+* create_variant_line_plot:     This script plots all variants as a line plot
 
-* create_variant_line_plot_only_increasing		This script plots only those variants with increasing frequencies
+* create_variant_line_plot_only_increasing:     This script plots only those variants with increasing frequencies
 
 
