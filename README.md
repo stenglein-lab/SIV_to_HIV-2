@@ -10,7 +10,7 @@ variants in SIV->HIV-2 sequencing datasets as described in:
 
 This pipeline assumes paired-read fastq files as inputs, e.g. stock_virus_R1.fastq stock_virus_R2.fastq 
 
-To run the pipeline, specify the sample name, for instance run:
+To run the pipeline on a single dataset, specify the sample name. For instance, run:
 
 `./identify_variants stock_virus`
 
@@ -48,3 +48,16 @@ are in the Stock_virus_consensus_v1.gff file
 To obtain the raw sequence datasets, run the fetch_and_process_datasets script
 
 **TODO:** create this script, once datasets in SRA 
+
+
+## Scripts used to create variant frequency plots
+
+These scripts were used to create plots of variant frequencies.  They depend on the PostScript::Simple perl library:
+
+http://search.cpan.org/~mcnewton/PostScript-Simple-0.09/lib/PostScript/Simple.pm
+
+* create_variant_line_plot								This script plots all variants as a line plot
+
+* create_variant_line_plot_only_increasing		This script plots only those variants with increasing frequencies
+
+
