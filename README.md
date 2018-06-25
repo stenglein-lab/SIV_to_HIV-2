@@ -41,12 +41,6 @@ Can be found in the siv.fa fasta format file.  This corresponds to the consensus
 stock virus used to infect mice at the beginning of the experiment.  The annotations for this file
 are in the Stock_virus_consensus_v1.gff file
 
-## to obtain the datasets
-
-To obtain the raw sequence datasets, run the fetch_and_process_datasets script
-
-**TODO:** create this script, once datasets in SRA 
-
 
 ## Scripts used to create variant frequency plots
 
