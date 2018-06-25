@@ -1,9 +1,7 @@
 ## Pipeline to analyze variant SIV->HIV-2 variant datasets
 
 This repository contains the scripts used to quantify and tabulate 
-variants in SIV->HIV-2 sequencing datasets as described in:
-
-**TODO:** insert reference (DOI) here 
+variants in SIV->HIV-2 sequencing datasets as described in [this paper](https://doi.org/10.1016/j.virol.2017.07.005)
 
 
 ## to run the analysis pipeline on a dataset
