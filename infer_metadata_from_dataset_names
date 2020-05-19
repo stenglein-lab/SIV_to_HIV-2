@@ -1,0 +1,124 @@
+#!/usr/bin/env perl
+use strict;
+use Getopt::Long;
+
+my $print_usage = 0;
+
+my $usage = <<USAGE;
+
+  This script infers metadata for SIV->HIV sequencing datasets based on the dataset names
+
+  Mark Stenglein,  10/23/2019
+
+  Usage: $0 [-h] 
+
+   [-h]          print this message
+
+USAGE
+
+if ((scalar @ARGV == 0) and -t STDIN) { print $usage and exit; }
+
+GetOptions ("h" => \$print_usage);
+
+# my $dataset_number = 1;
+# my %datasets = ();
+
+my %reps = ();
+
+# print a header row
+# print "$_\t$virus\t$generation\t$week\t$mouse_id\t$replicate\n";
+print "dataset\tvirus\tgeneration\tweek\tmouse_id\treplicate\n";
+
+# for each dataset ID
+while (<>)
+{
+	chomp;
+
+	my $virus = undef;
+	my $generation = undef;
+	my $mouse_id = undef;
+	my $week = undef;
+	my $replicate = undef;
+
+	# virus name: up to first underscore character
+   if (/^(\S+?)_/)
+	{
+	   $virus = $1;
+	}
+	else
+	{
+	   $virus = "NA";
+	   warn "warning: couldn't parse virus name from dataset: $_\n";
+	}
+
+	# generation: either G<N> or "1st", "2nd", etc.
+	if (/_G(\d)_/)
+	{
+	  $generation = $1;
+	}
+	elsif (/Stock/i) { $generation = 0; }
+	elsif (/_1st_/)  { $generation = 1; }
+	elsif (/_2nd_/)  { $generation = 2; }
+	elsif (/_3rd_/)  { $generation = 3; }
+	elsif (/_(\d)th_/) { $generation = $1; }
+	else
+	{
+		$generation = "NA";
+	   warn "warning: couldn't parse generation number from dataset: $_\n";
+	}
+
+	# mouse ID: an optional letter followed by 4 digits
+	if (/_([A-Z]?\d{4})/)
+	{
+	   $mouse_id = $1;
+	}
+	else
+	{
+		$mouse_id = "NA";
+	   warn "warning: couldn't parse mouse ID number from dataset: $_\n";
+	}
+
+	# week number: W<N>
+	if (/_W(\d{1,2})/)
+	{
+	   $week = $1;
+	}
+	elsif (/Stock/i)
+	{
+	   $week = 0;
+	}
+	else
+	{
+		$week = "NA";
+	   warn "warning: couldn't parse week number from dataset: $_\n";
+	}
+
+	# replicate 
+	# TODO better
+	# for now, first mouse observed for a particular week = "A"
+	# should base on whether a founder or not...
+
+	if (!defined $reps{$virus}{$generation})
+	{
+	   $replicate = "A";
+		$reps{$virus}{$generation} = $mouse_id;
+	}
+	elsif ($reps{$virus}{$generation} eq $mouse_id)
+	{
+	   $replicate = "A";
+	}
+	else
+	{
+	   $replicate = "B";
+	}
+
+	print "$_\t$virus\t$generation\t$week\t$mouse_id\t$replicate\n";
+
+	# # put in a hash
+   # $datasets{$dataset_number}{virus} = $virus;
+   # $datasets{$dataset_number}{generation} = $generation;
+   # $datasets{$dataset_number}{mouse_id} = $mouse_id;
+   # $datasets{$dataset_number}{week} = $week;
+}
+
+

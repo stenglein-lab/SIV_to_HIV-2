@@ -1,0 +1,146 @@
+#!/bin/bash -x
+
+# This script is the main pipeline script for variant tabulation
+# in virus amplicon sequencing datasets.
+#
+# it does the following steps:
+#
+# (1) remove low quality reads, basecalls, and to collapse non-unique sequences
+#
+# (2) run bowtie to align (pre-filtered) reads to the SIV reference genome sequence
+#
+# (3) uses lofreq to call variants relative to the SIV reference sequence
+#
+# (4) analyzes variants to determine their genomic position, whether they are synonymous or not, etc.
+#
+#
+#  This script takes a single variable as an input: <id>
+#
+#   id is the name of the dataset.  This means that this script expects fastq files
+#   named: ${id}_R1.fastq and ${id}_R2.fastq
+#   so if id = SIVsm_Stock_virus, there should be 2 files: SIVsm_Stock_virus_R1.fastq and SIVsm_Stock_virus_R2.fastq
+#
+#   Note that this dataset name should contain the refrence sequence to be mapped to (see below)
+#
+# Mark Stenglein 3/27/2017
+#
+id=$1
+
+# num of cores to use if multi-threading possible
+num_cores=8
+
+
+#
+# First, cleanup the reads: trimming for quality, adapters, primer seqs, etc.
+
+# (1) use cutadapt to trim low quality sequences, low quality bases, and adapter sequences
+#     You may need to modify the adapter sequence file (see below)
+#
+#     outputs  <id>_R1_f.fastq <id>_R2_f.fastq   --> trimmed fastq files
+#
+
+
+f1=${id}_R1.fastq
+f2=${id}_R2.fastq
+
+# use cutadapt to trim adapter sequences and do quality trimming and throw out too-short reads
+
+cutadapt  -j $num_cores -a AGATCGGAAGAGC -A AGATCGGAAGAGC -g GCTCTTCCGATCT -G GCTCTTCCGATCT --overlap 9  -q 30,30 --minimum-length 80 -u 30 -U 30 -o ${id}_R1_f.fastq -p ${id}_R2_f.fastq $f1 $f2                                                                                          
+# parts of this command:
+
+# cutadapt \ 
+# -a AGATCGGAAGAGC -A AGATCGGAAGAGC -g GCTCTTCCGATCT -G GCTCTTCCGATCT  \    # TruSeq style adapters
+# -q 30,30 \                                                                # filter low qual seqs -> see cutadapt documentation
+# --minimum-length 80 \                                                     # ditch seqs shorter than this and their pairs
+# -u 30  \                                                                  # trim the first 30 bases from R1 (primer sequences)
+# -U 30  \                                                                  # trim the first 30 bases from R2 (primer sequences)
+# -o ${id}_R1_f.fastq  \                                                    # trimmed (R1) output
+# -p ${id}_R2_f.fastq  \                                                    # paired read (R2) trimmed output
+# $f1 $f2                                                                   # the name of the input files  
+
+
+# -------------------------------
+# mapping to reference sequences.
+# -------------------------------
+
+# This script infers the name of index for this sample based on its name
+# in other words: datasets (fastq files) names include the name
+# of the bowtie index that should be used for mapping
+#
+# e.g. SIVsm_Stock_virus_R1.fastq --> this should be mapped 
+# to the SIVsm bowtie index
+#
+# This bowtie index should already exist in the present working directory
+#
+bt_index=`echo $id | grep -oP '\S+?_' | head -1 | sed  s/_//`
+gff=${bt_index}.gff
+
+# these are the 'pre-filtered' fastq files 
+f1=${id}_R1_f.fastq
+f2=${id}_R2_f.fastq
+
+# use bowtie to align to SIV ref seq
+output_prefix=${f1}.${bt_index}.paired
+log_f=${output_prefix}.bt_log
+
+# the bowtie command that will be run
+cmd="bowtie2 
+ -x $bt_index
+ -q
+ -1 $f1 
+ -2 $f2
+ --local
+ --score-min C,300,1
+ --no-unal
+ --time
+ --threads $num_cores
+ -S ${output_prefix}.sam"
+
+# actually run bowtie here
+$cmd 2>> $log_f
+
+# process output using samtools
+samtools view -S -b ${output_prefix}.sam > ${output_prefix}.bam
+samtools sort ${output_prefix}.bam >  ${output_prefix}_sorted.bam
+samtools index ${output_prefix}_sorted.bam
+samtools depth ${output_prefix}_sorted.bam > ${output_prefix}.depth
+
+# ---------------
+# Variant calling
+# ---------------
+
+vcf=${id}_R1_f.fastq.${bt_index}.paired_sorted.lofreq.vcf
+
+# use lofreq to call variants
+
+fasta_file=${bt_index}.fasta
+bam_file=${id}_R1_f.fastq.${bt_index}.paired_sorted.bam
+bcf_file=${bam_file/bam/bcf}
+vcf_file=${bcf_file/bcf/vcf}
+
+## samtools faidx $fasta_file
+
+# use lofreq to call variants
+lofreq_vcf_file=${vcf_file/.vcf/.lofreq.vcf}
+lofreq_pre_vcf_file=${vcf_file/.vcf/.lofreq.prefilter.vcf}
+rm -f $lofreq_vcf_file
+rm -f $lofreq_pre_vcf_file
+
+# lofreq call to quantify variant frequencies 
+lofreq call-parallel --no-default-filter --pp-threads $num_cores -f ${bt_index}.fasta -o $lofreq_pre_vcf_file $bam_file
+# call lofreq filter separately to avoid doing strand-bias filtering
+# -v 100 --> requires minimum 100x coverage
+# -V 0 --> no coverage maximum
+# -a 0.01 --> call variants above 1% (0.01 = min allele frequency)
+# -A 0 --> no maximum allele frequency
+lofreq filter -v 100 -V 0 -a 0.01 -A 0 --no-defaults -i $lofreq_pre_vcf_file -o $lofreq_vcf_file 
+
+
+# ----------------
+# variant analysis
+# ----------------
+
+# analyze variants will determine whether these are non synonymous or synonymous variants
+# and identify the impacted CDS, etc.
+./analyze_variants $gff $vcf > ${id}_variant_alleles.lofreq.txt
+

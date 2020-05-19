@@ -1,0 +1,8 @@
+bowtie2-build SIVcpzLB715.fasta SIVcpzLB715
+bowtie2-build SIVcpzEK505.fasta SIVcpzEK505
+bowtie2-build SIVmac239.fasta  SIVmac239
+bowtie2-build SIVcpzMB897.fasta SIVcpzMB897
+samtools faidx SIVcpzLB715.fasta
+samtools faidx SIVcpzEK505.fasta
+samtools faidx SIVmac239.fasta
+samtools faidx SIVcpzMB897.fasta

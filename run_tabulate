@@ -1,0 +1,14 @@
+#!/bin/bash
+
+# tabulate all the variants into a file per virus
+
+for virus in `cat viruses.txt` 
+do
+    ./tabulate_variants ${virus}*_variant_alleles.lofreq.txt | sed '2d' > ${virus}_variant_table.txt
+	 # get rid of unnecessary text in the column headers
+	 sed -i 's/_variant_alleles.lofreq.txt//g' ${virus}_variant_table.txt
+done
+
+
+
+

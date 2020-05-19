@@ -1,0 +1,35 @@
+#!/bin/bash
+
+# This script is the main entry point for variant
+# identification and tabulation
+# it does the following steps:
+#
+# (1) run a pre-filtering script to remove low quality reads, basecalls, and to collapse
+#     non-unique sequences
+#
+# (2) run bowtie to align (pre-filtered) reads to the SIV reference genome sequence
+#
+# (3) uses lofreq to call variants relative to the SIV reference sequence
+#
+# (4) analyzes variants to determine their genomic position, whether they are synonymous or not, etc.
+#
+#
+# Mark Stenglein 3/27/2017
+#
+id=$1
+# infer name of index for this sample based on its name
+bt_index=`echo $id | grep -oP '\S+?_' | head -1 | sed  s/_//`
+gff=${bt_index}.gff
+
+# use bowtie to align to SIV ref seq
+# ./run_bt $id $bt_index
+
+vcf=${id}_R1_f.fastq.${bt_index}.paired_sorted.lofreq.vcf
+
+# use lofreq to call variants
+# ./call_variants ${id} $bt_index
+
+./analyze_variants    $gff $vcf > ${id}_variant_alleles.lofreq.not_multiple_codon_hits.txt
+./analyze_variants -s $gff $vcf > ${id}_variant_alleles.lofreq.multiple_codon_hits.txt
+./analyze_variants.old $gff $vcf > ${id}_variant_alleles.lofreq.old.txt
+

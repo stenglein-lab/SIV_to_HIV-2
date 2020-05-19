@@ -2,6 +2,8 @@
 
 use strict;
 use Data::Dumper;
+use Getopt::Long;
+
 
 my $usage = <<USAGE;
 
@@ -38,9 +40,21 @@ my $usage = <<USAGE;
  Mark Stenglein, 3/27/2017
 
 
-  usage: $0 gff_file vcf_files
+  usage: $0 [-h] [-s] gff_file vcf_files
+
+    - h    print this help message
+
+    - s    same_codon: only output variants for codons for which more than one variant was detected
+
 
 USAGE
+
+if ((scalar @ARGV == 0) and -t STDIN) { print $usage and exit; }
+
+my $print_usage = 0;
+my $same_codon_only = 0;
+
+GetOptions ("h" => \$print_usage, "s" => \$same_codon_only);
 
 
 my $gff_file = shift or die "$usage\n";
@@ -54,7 +68,7 @@ my %cds = ();
 my %genome_to_cd_map = ();
 my %cds_seqs = ();
 my %basemap = ();
-my %seqs = ();
+# my %seqs = ();
 
 # parse gff file -> store annotations
 parse_gff($gff_fh);
@@ -67,9 +81,12 @@ my %histo = ();
 my %lengths = ();
 my %variants = ();
 
-# print header line
-print "CDS\tref_aa\tcodon_number\tvariant_aa\tSynonymous or non\tposition in genome\tposition in CDS\tref_codon\tvariant_codon\tref base\tvariant base\tvariant_fraction\n";
+my %all_variants = ();
+my %codons_hit = ();
+my $variant_number = 1;
 
+
+# read in VCF file and store variants
 while (<$vcf_fh>)
 {
    chomp;
@@ -135,80 +152,137 @@ while (<$vcf_fh>)
       warn "ignoring line with unexpected format in VCF: $_\n";
    }
 
-   my $N_or_S = undef;
-
-   $N_or_S = process_variant ($contig, $position, $ref, $alt, $ref_depth, $variant_depth, $overall_depth);
+   process_variant ($contig, $position, $ref, $alt, $ref_depth, $variant_depth, $overall_depth);
 
 }
 close $vcf_fh;
 
+output_variants();
+
+sub output_variants
+{
+   # print header line
+   print "CDS\tref_aa\tcodon_number\tvariant_aa\tSynonymous or non\tposition in genome\tposition in CDS\tref_codon\tvariant_codon\tref base\tvariant base\tvariant_fraction\n";
+	foreach my $variant_number (sort {$a<=>$b} keys %all_variants)
+	{
+      my $cds_hit = $all_variants{$variant_number}{cds_hit};
+      my $ref_aa = $all_variants{$variant_number}{ref_aa};
+      my $codon_number = $all_variants{$variant_number}{codon_number};
+      my $alt_aa = $all_variants{$variant_number}{alt_aa};
+      my $N_or_S = $all_variants{$variant_number}{N_or_S};
+      my $position = $all_variants{$variant_number}{position};
+      my $position_in_cds = $all_variants{$variant_number}{position_in_cds};
+      my $ref_codon = $all_variants{$variant_number}{ref_codon};
+      my $alt_codon = $all_variants{$variant_number}{alt_codon};
+      my $ref = $all_variants{$variant_number}{ref};
+      my $alt = $all_variants{$variant_number}{alt};
+      my $variant_fraction = $all_variants{$variant_number}{variant_fraction};
+
+		# check to see if only going to output hits to the same codon...
+		if ($same_codon_only)
+		{
+		   if ($codons_hit{$cds_hit}{$codon_number} <= 1)
+			{
+			   next;
+			}
+		}
+
+		print "$cds_hit\t$ref_aa\t$codon_number\t$alt_aa\t$N_or_S\t$position\t$position_in_cds\t$ref_codon\t$alt_codon\t$ref\t$alt\t$variant_fraction\n";
+
+   }
+}
+
 sub process_variant
 {
+	# TODO: leave this for upstream variant calling?
    my $min_allele_freq = 0.05;
+
    my ($seg_id, $position, $ref, $alt, $ref_depth, $variant_depth, $depth) = @_;
-   # my $variant_fraction = sprintf ("%0.2f", $variant_depth / ($ref_depth + $variant_depth));
+
    my $variant_fraction = sprintf ("%0.2f", ($variant_depth / $depth) );
+
+	if ($variant_fraction < $min_allele_freq) 
+	{
+	   return;;
+	}
+
+   # Default values in case not in an annotated position
+	my $cds_hit = "NA";
+	my $position_in_cds = "NA";
+   my $codon_number = "NA";
+   my $ref_codon = "NA";
+   my $alt_codon = "NA";
+
+   my $ref_aa = "NA";
+   my $alt_aa = "NA";
+   my $N_or_S = "NA";
+
+	# in an annotated position
    if (defined $basemap{$position})
    {
       # this is in an annotated feature
       my @cds_hit = @{$basemap{$position}};
       my $cds_hit_string = join "+", @cds_hit;
-      if ($variant_fraction <= $min_allele_freq)  
+      # warn "$position\t$cds_hit_string\t$depth\t$ref_depth\t$variant_depth\n";
+      if (scalar @cds_hit > 1)
       {
-         ## warn "$position\t$cds_hit_string\t$depth\t$ref_depth\t$variant_depth\n";
-         # don't output if less than a certain frequency...
+         warn "** more than one CDS hit! **\n";
       }
-      else
+      foreach my $this_cds_hit (@cds_hit)
       {
-         # warn "$position\t$cds_hit_string\t$depth\t$ref_depth\t$variant_depth\n";
-         if (scalar @cds_hit > 1)
+			$cds_hit = $this_cds_hit;
+         $position_in_cds = $genome_to_cd_map{$cds_hit}{$position};
+         my $cds_seq = $cds_seqs{$cds_hit};
+         my $ref_base = substr($cds_seq, ($position_in_cds-1), 1);
+         if ($ref_base ne $ref)
          {
-            warn "** more than one CDS hit! **\n";
+            warn "error in reference base.  got: $ref_base.  expecting: $ref   CDS: $cds_hit    pos: $position:    pos_in_cds: $position_in_cds\n";
+            die "cds_seq: $cds_seq\n";
          }
-         foreach my $cds_hit (@cds_hit)
-         {
-            my $position_in_cds = $genome_to_cd_map{$cds_hit}{$position};
-            my $cds_seq = $cds_seqs{$cds_hit};
-            my $ref_base = substr($cds_seq, ($position_in_cds-1), 1);
-            if ($ref_base ne $ref)
-            {
-               die "error in reference base.  got: $ref_base.  expecting: $ref CDS: $cds_hit pos: $position: pos_in_cds: $position_in_cds\n";
-            }
-            my $alt_cds = $cds_seq;
-            # change coding sequence with variant base
-            substr($alt_cds, ($position_in_cds - 1), 1) = $alt;
-            my $codon_number = int(($position_in_cds-1)/3) + 1;
-            my $ref_codon = substr ($cds_seq, (($codon_number - 1) * 3), 3);
-            my $alt_codon = substr ($alt_cds, (($codon_number - 1) * 3), 3);
+         my $alt_cds = $cds_seq;
+         # change coding sequence with variant base
+         substr($alt_cds, ($position_in_cds - 1), 1) = $alt;
+         $codon_number = int(($position_in_cds-1)/3) + 1;
+         $ref_codon = substr ($cds_seq, (($codon_number - 1) * 3), 3);
+         $alt_codon = substr ($alt_cds, (($codon_number - 1) * 3), 3);
 
-            my $ref_aa = translate($ref_codon);
-            my $alt_aa = translate($alt_codon);
-            my $N_or_S = "S";
-            if ($ref_aa ne $alt_aa)
-            {
-               $N_or_S = "N";
-            }
-            # warn "$position\t$cds_hit\t$depth\t$ref_depth\t$variant_depth\n";
-            print "$cds_hit\t$ref_aa\t$codon_number\t$alt_aa\t$N_or_S\t$position\t$position_in_cds\t$ref_codon\t$alt_codon\t$ref\t$alt\t$variant_fraction\n";
+         $ref_aa = translate($ref_codon);
+         $alt_aa = translate($alt_codon);
+         $N_or_S = "S";
+         if ($ref_aa ne $alt_aa)
+         {
+            $N_or_S = "N";
          }
+
+			# keep track of how many times each codon was hit
+			$codons_hit{$cds_hit}{$codon_number} += 1;
+
+			# store info on variant
+         # print "$cds_hit\t$ref_aa\t$codon_number\t$alt_aa\t$N_or_S\t$position\t$position_in_cds\t$ref_codon\t$alt_codon\t$ref\t$alt\t$variant_fraction\n";
+         $all_variants{$variant_number}{cds_hit} = $cds_hit;
+         $all_variants{$variant_number}{ref_aa} = $ref_aa;
+         $all_variants{$variant_number}{codon_number} = $codon_number;
+         $all_variants{$variant_number}{alt_aa} = $alt_aa;
+         $all_variants{$variant_number}{N_or_S} = $N_or_S;
+         $all_variants{$variant_number}{position} = $position;
+         $all_variants{$variant_number}{position_in_cds} = $position_in_cds;
+         $all_variants{$variant_number}{ref_codon} = $ref_codon;
+         $all_variants{$variant_number}{alt_codon} = $alt_codon;
+         $all_variants{$variant_number}{ref} = $ref;
+         $all_variants{$variant_number}{alt} = $alt;
+         $all_variants{$variant_number}{variant_fraction} = $variant_fraction;
+	      $variant_number += 1;
       }
+
    }
    else
    {
-      # Not in an annotated position
-		my $cds_hit = "NA";
-		my $position_in_cds = "NA";
-		my $ref = "NA";
-		my $alt = "NA";
-      my $codon_number = "NA";
-      my $ref_codon = "NA";
-      my $alt_codon = "NA";
 
-      my $ref_aa = "NA";
-      my $alt_aa = "NA";
-      my $N_or_S = "NA";
-      print "$cds_hit\t$ref_aa\t$codon_number\t$alt_aa\t$N_or_S\t$position\t$position_in_cds\t$ref_codon\t$alt_codon\t$ref\t$alt\t$variant_fraction\n";
+      # print "$cds_hit\t$ref_aa\t$codon_number\t$alt_aa\t$N_or_S\t$position\t$position_in_cds\t$ref_codon\t$alt_codon\t$ref\t$alt\t$variant_fraction\n";
+	   # $ref = "NA";
+	   # $alt = "NA";
    }
+
 }
 
 sub reverse_complement
@@ -334,38 +408,15 @@ sub parse_gff
    while (<$gff_fh>)
    {
      chomp;
-     if (/^##/)
+     if (/^#/ and not /##FASTA/)
      {
-        if (/##DNA (.*)$/)
-        {
-           $fetching_seq = 1;
-           $seq_id = $1;
-           next;
-        }
-        elsif (/##end-DNA/)
-        {
-           $seqs{$seq_id} = $seq;
-           ## $seq = undef;
-           $fetching_seq = 0;
-        }
-        if ($fetching_seq)
-        {
-           if (/^##(.*)$/)
-           {
-              $seq .= $1;
-           }
-        }
-      }
-      else
-      {
-      
+        next;
+     }
+     if (!$fetching_seq)
+     {
          my @fields = split "\t";
          # Fields are: <seqname> <source> <feature> <start> <end> <score> <strand> <frame> [attributes] [comments]
          $seq_id = $fields[0];
-         if (!$seqs{$seq_id})
-         {
-            die "error: feature refers to unknown sequence: $_\n";
-         }
          if ($fields[2] eq "CDS")
          {
             my $name = $fields[8];
@@ -398,6 +449,24 @@ sub parse_gff
                die "error: don't yet support neg strand CDS \n";
             }
          }
+     }
+     if (/##FASTA/)
+     {
+        $fetching_seq = 1;
+        warn "found seq\n";
+     }
+     elsif($fetching_seq)
+     {
+        if (/>(\S+)/)
+        {
+           $seq_id = $1;
+           # warn "seq_id: $seq_id\n";
+        }
+        else
+        {
+           $seq .= $_;
+           # warn "seq: $seqs{$seq_id}\n";
+        }
       }
    }
 
@@ -406,6 +475,7 @@ sub parse_gff
    foreach my $cds_name (@cds_names)
    {
       # warn "CDS: $cds_name\n";
+      # warn "seq: $seq\n";
       # get first start posn
       my @starts = sort @{$cds{$cds_name}{start}};   # TODO: co-sorting assumption OK?
       my @stops = sort @{$cds{$cds_name}{stop}};
@@ -423,6 +493,7 @@ sub parse_gff
             # warn "$genome_position\t$cds_name:$cds_position\n";
 
             # $cds_seqs{$cds_name}{$cds_position} = substr ($seq, ($cds_position-1), 1);
+            # warn "cds_name $cds_name    genome_position:  $genome_position\n"; 
             $cds_seqs{$cds_name} .= substr ($seq, ($genome_position-1), 1);
             $cds_position += 1;
          }
