@@ -3,6 +3,8 @@
 This repository contains the scripts used to quantify and tabulate 
 variants in SIV->HIV-2 sequencing datasets as described in [this paper](https://doi.org/10.1016/j.virol.2017.07.005) and [this paper](https://www.ncbi.nlm.nih.gov/pubmed/31576587)
 
+The code used for the 2017 paper is in captured in [release v1.0](https://github.com/stenglein-lab/SIV_to_HIV-2/releases/tag/v1.0)
+
 ## to run the analysis pipeline on a dataset
 
 This pipeline assumes paired-read fastq files as inputs that are named <dataset_id>_R1.fastq and <dataset_id>_R2.fastq.
@@ -67,6 +69,8 @@ I've developed a Shiny-based tool to visualize these variants, in [this reposito
 
 ## Limitations/TODO:
 
+This pipeline could be improved in the following ways:
+
 - This pipeline does not handle indel variants or other structural variants
-- This pipeline does not handle codons changed by more than one variant (except to warn that multiple variants were detected for a particular codon) 
+- This pipeline does not by default handle codons changed by more than one variant, except to warn that multiple variants were detected for a particular codon.  The [analyze_variants script](./analyze_variants) does have a command line option (`-s`) that will output only codons impacted by multiple variants.  The issue is partly related to the next bullet point: the lofreq variant caller does not assess whether single nucleotide variants are linked, so even if 2 or more variants impinge on a single codon, there is no information in the lofreq vcf indicating whether these are linked. 
 - This pipeline does not address variant linkage.
