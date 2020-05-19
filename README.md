@@ -7,12 +7,13 @@ variants in SIV->HIV-2 sequencing datasets as described in [this paper](https://
 
 This pipeline assumes paired-read fastq files as inputs that are named <dataset_id>_R1.fastq and <dataset_id>_R2.fastq.
 
-e.g. SIVsm_stock_virus_R1.fastq SIVsm_stock_virus_R2.fastq 
+e.g.: `SIVsm_stock_virus_R1.fastq SIVsm_stock_virus_R2.fastq`
 
 This pipeline also assume the existence of a bowtie2 index made from the appropriate reference sequence.
 
 The name of this bowtie index will match everything up to the first underscore in the dataset_id.  
-So in the above example, the pipeline is expecting the existence of a bowtie2 index named SIVsm
+
+So in the above example, the pipeline is expecting the existence of a bowtie2 index named `SIVsm (SIVsm*.bt2)`
 
 See the [build_indexes script](./build_indexes) for an example of a script that creates these indexes.
 
@@ -20,7 +21,7 @@ To run the pipeline on a single dataset, use the [run_variant_pipeline](./run_va
 
 `./run_variant_pipeline SIVsm_stock_virus`
 
-The final output of this script will be a file named SIVsm_stock_virus_variant_alleles.lofreq.txt [or similar].
+The final output of this script will be a file named `SIVsm_stock_virus_variant_alleles.lofreq.txt [or similar].`
 
 This file will contain a table of the variants identified in that dataset relative to the virus reference sequence.  This is a tab delimited file that can be imported into R or Excel or other downstream analysis tools.  
 
@@ -44,7 +45,7 @@ tools:
 
 ## The SIV reference sequences used for the above papers
 
-Can be found in the fasta format files in this repository.  These correspond to the consensus sequence of the
+Can be found in the fasta format files in the [reference_sequences](./reference_sequences) directory in this repository.  These correspond to the consensus sequence of the
 stock viruses used to infect mice at the beginning of the experiments.  The annotations for this file
 are in the associated gff files.
 
